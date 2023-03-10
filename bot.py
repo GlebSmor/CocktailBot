@@ -18,8 +18,8 @@ except FileNotFoundError:
 
 @bot.message_handler(commands=['start'])
 def start(message: Message):
-    '''Функция start реагирует на команду /start
-    выводит описание бота, добавляет пользователя в бд, выводит меню кнопок'''
+    # '''Функция start реагирует на команду /start
+    # выводит описание бота, добавляет пользователя в бд, выводит меню кнопок'''
 
     with open('users.json', 'r') as file:
         data_from_json = json.load(file)
@@ -36,9 +36,11 @@ def start(message: Message):
         json.dump(data_from_json, file, indent=4)
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)    # вывод меню
-    search = types.KeyboardButton('🔍Search')
-    history = types.KeyboardButton('🕓History')
+    search = types.KeyboardButton('\U0001F50D Search')
+    history = types.KeyboardButton('\U0001F553 History')
+    random = types.KeyboardButton('\U0001F3B2 Random drink')
     markup.add(search, history)
+    markup.add(random)
     bot.send_message(chat_id=message.chat.id, text=f'Hello {message.from_user.first_name}!\n'
                                                    f'This is cocktail recipes bot.\n'
                                                    f'Here you can find recipes for your favorite cocktails\n\n\n'
@@ -48,13 +50,18 @@ def start(message: Message):
 
 @bot.message_handler(content_types=['text'])
 def search_drink(message: Message):
-    '''Функция поиска/вывода истории'''
+    # '''Функция поиска/вывода истории'''
 
-    if message.text == '🔍Search':
+    if message.text == '\U0001F50D Search':
         bot.send_message(chat_id=message.chat.id, text='Enter the cocktail name:')
         bot.register_next_step_handler(message, callback=search_drink_handle)
 
-    elif message.text == '🕓History':
+    elif message.text == '\U0001F3B2 Random drink':
+        data = random_cocktail(message.from_user.id)
+        bot.send_message(chat_id=message.chat.id, text=data[0])
+        bot.send_photo(message.chat.id, data[1])
+
+    elif message.text == '\U0001F553 History':
         with open('users.json', 'r') as file:
             data_from_json = json.load(file)
         history = data_from_json[str(message.from_user.id)]['history']
@@ -64,7 +71,7 @@ def search_drink(message: Message):
 
 
 def search_drink_handle(message: Message):
-    '''Функция search_drink_handle выводит список коктейлей по ключевому слову'''
+    # '''Функция search_drink_handle выводит список коктейлей по ключевому слову'''
 
     mess = ''
     name = message.text
@@ -87,7 +94,7 @@ def search_drink_handle(message: Message):
         with open('users.json', 'w') as file:
             json.dump(data_from_json, file, indent=4, ensure_ascii=False)
 
-        # вывод соощений
+        # вывод сообщений
         bot.send_message(chat_id=message.chat.id, text=f'Pick cocktail number (1-{count}):')
         bot.send_message(chat_id=message.chat.id, text=mess)
         bot.register_next_step_handler(message, callback=pick_cocktail_handle)
@@ -98,8 +105,10 @@ def search_drink_handle(message: Message):
 
 
 def pick_cocktail_handle(message: Message):
-    '''Функция pick_cocktail_handle выводит название, ингридиенты, инструкцию и фото выбраного коктейля'''
-    if message.text == '🔍Search' or message.text == '🕓History':
+    # '''Функция pick_cocktail_handle выводит название, ингридиенты, инструкцию и фото выбраного коктейля'''
+
+    if message.text == '\U0001F50D Search' or message.text == '\U0001F553 History' \
+            or message.text == '\U0001F3B2 Random drink':
         search_drink(message)
     else:
         mess = ''
@@ -157,6 +166,46 @@ def pick_cocktail_handle(message: Message):
             mess = 'Input error'
             bot.send_message(chat_id=message.chat.id, text=mess)
             bot.register_next_step_handler(message, callback=pick_cocktail_handle)
+
+
+def random_cocktail(user_id):
+    mess = ''
+    count = 0
+    response = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/random.php').text)
+    cocktail = response['drinks'][0]
+    mess += f'Name: {cocktail["strDrink"]} \U0001F379\n'
+    mess += '\n\nIngredients \U0001F6D2\n\n'
+
+    # запись ингридиентов
+    for ingredient in cocktail:
+        if cocktail[ingredient] and 'strIngredient' in ingredient:
+            count += 1
+            if cocktail["strMeasure" + str(count)]:
+                mess += f'    {cocktail[ingredient]}: {cocktail["strMeasure" + str(count)]}\n'
+            else:
+                mess += f'    {cocktail[ingredient]}\n'
+    # запись инструкции
+    instruction = cocktail['strInstructions'].split('.')
+
+    mess += '\n\nInstruction \U0001F4DC\n\n'
+    for string in range(0, len(instruction) - 1):
+        instruction[string] = instruction[string].strip() + '.'
+    mess += '\n'.join(instruction)
+
+    # запись в историю запросов
+    with open('users.json', 'r') as file:
+        data_from_json = json.load(file)
+    history = data_from_json[str(user_id)]['history']
+
+    if len(history) == 5:
+        history.pop(0)
+    history.append((mess, cocktail['strDrinkThumb']))
+
+    with open('users.json', 'w') as file:
+        json.dump(data_from_json, file, indent=4)
+
+    image = cocktail['strDrinkThumb']
+    return mess, image
 
 
 bot.polling()
