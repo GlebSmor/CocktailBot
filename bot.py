@@ -4,6 +4,7 @@ import json
 from config import TOKEN
 from telebot import types
 from telebot.types import Message
+from json.decoder import JSONDecodeError
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -31,21 +32,33 @@ def start(message: Message):
         data_from_json[user_id] = {'username': username}
         data_from_json[user_id]['history'] = []
         data_from_json[user_id]['cocktail'] = ''
+        data_from_json[user_id]['ingredient_search'] = {}
 
     with open('users.json', 'w') as file:
         json.dump(data_from_json, file, indent=4)
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)    # вывод меню
     search = types.KeyboardButton('\U0001F50D Search')
+    ingredient_search = types.KeyboardButton('\U0001F50D Search by ingredient')
     history = types.KeyboardButton('\U0001F553 History')
     random = types.KeyboardButton('\U0001F3B2 Random drink')
-    markup.add(search, history)
-    markup.add(random)
+    markup.add(search, ingredient_search)
+    markup.add(random, history)
     bot.send_message(chat_id=message.chat.id, text=f'Hello {message.from_user.first_name}!\n'
                                                    f'This is cocktail recipes bot.\n'
                                                    f'Here you can find recipes for your favorite cocktails\n\n\n'
                                                    f'Bot based on https://www.thecocktaildb.com',
                      reply_markup=markup)
+
+
+@bot.message_handler(commands=['clear'])
+def delete_info(message: Message):
+    with open('users.json', 'r') as file:
+        data_from_json = json.load(file)
+        del data_from_json[str(message.from_user.id)]
+
+    with open('users.json', 'w') as file:
+        json.dump(data_from_json, file)
 
 
 @bot.message_handler(content_types=['text'])
@@ -55,6 +68,10 @@ def search_drink(message: Message):
     if message.text == '\U0001F50D Search':
         bot.send_message(chat_id=message.chat.id, text='Enter the cocktail name:')
         bot.register_next_step_handler(message, callback=search_drink_handle)
+
+    elif message.text == '\U0001F50D Search by ingredient':
+        bot.send_message(chat_id=message.chat.id, text='Enter the ingredient name:')
+        bot.register_next_step_handler(message, callback=search_by_ingredient_handle)
 
     elif message.text == '\U0001F3B2 Random drink':
         response = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/random.php').text)
@@ -72,45 +89,108 @@ def search_drink(message: Message):
             bot.send_photo(message.chat.id, elem[1])
 
 
-def search_drink_handle(message: Message):
-    # '''Функция search_drink_handle выводит список коктейлей по ключевому слову'''
+def search_by_ingredient_handle(message: Message):
+    if message.text == '\U0001F50D Search' or message.text == '\U0001F553 History' \
+            or message.text == '\U0001F3B2 Random drink' or message.text == '\U0001F50D Search by ingredient':
+        search_drink(message)
+    else:
+        mess = ''
+        name = message.text
 
-    mess = ''
-    name = message.text
+        try:    # проверка наличия коктейля
+            response = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=' + name).text)
+            with open('users.json', 'r') as file:
+                data_from_json = json.load(file)
+            # создание списка коктейлей совпавших по ключ. слову
+            cocktails = [response['drinks'][x] for x in range(0, len(response['drinks']))]
+            count = 0
+            # вывод списка
+            if data_from_json[str(message.from_user.id)]['ingredient_search'] != '':
+                data_from_json[str(message.from_user.id)]['ingredient_search'].clear()
+            for cocktail in cocktails:
+                mess += f'{count + 1} - {cocktail["strDrink"]}\n'
+                data_from_json[str(message.from_user.id)]['ingredient_search'][count] = cocktail["strDrink"]
+                count += 1
 
-    # запрос к api
-    response = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/search.php?s=' + name).text)
+            with open('users.json', 'w') as file:
+                json.dump(data_from_json, file, indent=4, ensure_ascii=False)
 
-    try:    # проверка наличия коктейля
-        # создание списка коктейлей совпавших по ключ. слову
-        cocktails = [response['drinks'][x] for x in range(0, len(response['drinks']))]
-        count = 0
-        # вывод списка
-        for cocktail in cocktails:
-            mess += f'{count + 1} - {cocktail["strDrink"]}\n'
-            count += 1
-        # загрузка поиска в бд
+            bot.send_message(chat_id=message.chat.id, text=f'Pick cocktail number (1-{count}):')
+            bot.send_message(chat_id=message.chat.id, text=mess)
+            bot.register_next_step_handler(message, callback=pick_cocktail_by_ingredient_handle)
+
+        except (TypeError, JSONDecodeError):  # обработка ошибки
+            mess = 'No drinks found'
+            bot.reply_to(message, text=mess)
+            bot.register_next_step_handler(message, callback=search_by_ingredient_handle)
+
+
+def pick_cocktail_by_ingredient_handle(message: Message):
+    if message.text == '\U0001F50D Search' or message.text == '\U0001F553 History' \
+            or message.text == '\U0001F3B2 Random drink' or message.text == '\U0001F50D Search by ingredient':
+        search_drink(message)
+    else:
         with open('users.json', 'r') as file:
             data_from_json = json.load(file)
-            data_from_json[str(message.from_user.id)]['cocktail'] = name + '-' + str(count)
-        with open('users.json', 'w') as file:
-            json.dump(data_from_json, file, indent=4, ensure_ascii=False)
+            qty = len(data_from_json[str(message.from_user.id)]['ingredient_search']) - 1
+        if message.text.isdigit() and 1 <= int(message.text) <= qty:
+            name = data_from_json[str(message.from_user.id)]['ingredient_search'][str(int(message.text) - 1)]
+            cocktail = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/search.php?s=' + name).text)
+            data = information_output(cocktail['drinks'][0], message.from_user.id)
+            data_from_json[str(message.from_user.id)]['ingredient_search'].clear()
+            # вывод сообщения
+            bot.send_message(chat_id=message.chat.id, text=data[0])
+            # вывод изображения
+            bot.send_photo(message.chat.id, data[1])
+            bot.register_next_step_handler(message, callback=pick_cocktail_by_ingredient_handle)
 
-        # вывод сообщений
-        bot.send_message(chat_id=message.chat.id, text=f'Pick cocktail number (1-{count}):')
-        bot.send_message(chat_id=message.chat.id, text=mess)
-        bot.register_next_step_handler(message, callback=pick_cocktail_handle)
-    except TypeError:   # обработка ошибки
-        mess = 'No drinks found'
-        bot.reply_to(message, text=mess)
-        bot.register_next_step_handler(message, callback=search_drink_handle)
+        else:  # обработка ошибки ввода
+            mess = 'Input error'
+            bot.send_message(chat_id=message.chat.id, text=mess)
+            bot.register_next_step_handler(message, callback=pick_cocktail_by_ingredient_handle)
+
+
+def search_drink_handle(message: Message):
+    # '''Функция search_drink_handle выводит список коктейлей по ключевому слову'''
+    if message.text == '\U0001F50D Search' or message.text == '\U0001F553 History' \
+            or message.text == '\U0001F3B2 Random drink' or message.text == '\U0001F50D Search by ingredient':
+        search_drink(message)
+    else:
+        mess = ''
+        name = message.text
+        # запрос к api
+        response = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/search.php?s=' + name).text)
+        try:    # проверка наличия коктейля
+
+            # создание списка коктейлей совпавших по ключ. слову
+            cocktails = [response['drinks'][x] for x in range(0, len(response['drinks']))]
+            count = 0
+            # вывод списка
+            for cocktail in cocktails:
+                mess += f'{count + 1} - {cocktail["strDrink"]}\n'
+                count += 1
+            # загрузка поиска в бд
+            with open('users.json', 'r') as file:
+                data_from_json = json.load(file)
+                data_from_json[str(message.from_user.id)]['cocktail'] = name + '-' + str(count)
+            with open('users.json', 'w') as file:
+                json.dump(data_from_json, file, indent=4, ensure_ascii=False)
+
+            # вывод сообщений
+            bot.send_message(chat_id=message.chat.id, text=f'Pick cocktail number (1-{count}):')
+            bot.send_message(chat_id=message.chat.id, text=mess)
+            bot.register_next_step_handler(message, callback=pick_cocktail_handle)
+        except TypeError:   # обработка ошибки
+            mess = 'No drinks found'
+            bot.reply_to(message, text=mess)
+            bot.register_next_step_handler(message, callback=search_drink_handle)
 
 
 def pick_cocktail_handle(message: Message):
     # '''Функция pick_cocktail_handle выводит название, ингридиенты, инструкцию и фото выбраного коктейля'''
 
     if message.text == '\U0001F50D Search' or message.text == '\U0001F553 History' \
-            or message.text == '\U0001F3B2 Random drink':
+            or message.text == '\U0001F3B2 Random drink' or message.text == '\U0001F50D Search by ingredient':
         search_drink(message)
 
     else:
@@ -126,7 +206,6 @@ def pick_cocktail_handle(message: Message):
             cocktails = [response['drinks'][x] for x in range(0, len(response['drinks']))]
             # запись выбранного напитка
             cocktail = cocktails[int(message.text) - 1]
-
             data = information_output(cocktail, message.from_user.id)
             # вывод сообщения
             bot.send_message(chat_id=message.chat.id, text=data[0])
@@ -173,7 +252,6 @@ def information_output(cocktail, user_id):
 
     with open('users.json', 'w') as file:
         json.dump(data_from_json, file, indent=4)
-
     image = cocktail['strDrinkThumb']
     return mess, image
 
