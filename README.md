@@ -1,6 +1,8 @@
 # CocktailBot
 Бот для поиска рецептов коктейлей, основан на https://www.thecocktaildb.com/api.php
 
+Последовательность работ.
+
 Установить зависимости
 > pip install -r requirements.txt
 
