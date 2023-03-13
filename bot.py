@@ -51,16 +51,6 @@ def start(message: Message):
                      reply_markup=markup)
 
 
-@bot.message_handler(commands=['clear'])
-def delete_info(message: Message):
-    with open('users.json', 'r') as file:
-        data_from_json = json.load(file)
-        del data_from_json[str(message.from_user.id)]
-
-    with open('users.json', 'w') as file:
-        json.dump(data_from_json, file)
-
-
 @bot.message_handler(content_types=['text'])
 def search_drink(message: Message):
     # '''Функция поиска/вывода истории'''
@@ -119,7 +109,7 @@ def search_by_ingredient_handle(message: Message):
             bot.send_message(chat_id=message.chat.id, text=mess)
             bot.register_next_step_handler(message, callback=pick_cocktail_by_ingredient_handle)
 
-        except (TypeError, JSONDecodeError):  # обработка ошибки
+        except (TypeError, JSONDecodeError):  # обработка ошибок
             mess = 'No drinks found'
             bot.reply_to(message, text=mess)
             bot.register_next_step_handler(message, callback=search_by_ingredient_handle)
@@ -132,7 +122,8 @@ def pick_cocktail_by_ingredient_handle(message: Message):
     else:
         with open('users.json', 'r') as file:
             data_from_json = json.load(file)
-            qty = len(data_from_json[str(message.from_user.id)]['ingredient_search']) - 1
+            qty = len(data_from_json[str(message.from_user.id)]['ingredient_search'])
+        # проверка ввода
         if message.text.isdigit() and 1 <= int(message.text) <= qty:
             name = data_from_json[str(message.from_user.id)]['ingredient_search'][str(int(message.text) - 1)]
             cocktail = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/search.php?s=' + name).text)
