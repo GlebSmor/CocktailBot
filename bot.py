@@ -13,7 +13,7 @@ try:
 
     file_init = open('users.json', 'r')
 except FileNotFoundError:
-    with open('users.json', 'w') as file_init:
+    with open('users.json', 'w', encoding='utf-8') as file_init:
         file_init.write('{}')
 
 
@@ -22,7 +22,7 @@ def start(message: Message):
     # Функция start реагирует на команду /start
     # выводит описание бота, добавляет пользователя в бд, выводит меню кнопок.
 
-    with open('users.json', 'r') as file:
+    with open('users.json', 'r', encoding='utf-8') as file:
         data_from_json = json.load(file)
 
     user_id = message.from_user.id
@@ -34,7 +34,7 @@ def start(message: Message):
         data_from_json[user_id]['cocktail'] = ''
         data_from_json[user_id]['ingredient_search'] = {}
 
-    with open('users.json', 'w') as file:
+    with open('users.json', 'w', encoding='utf-8') as file:
         json.dump(data_from_json, file, indent=4)
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)    # вывод меню
@@ -53,10 +53,10 @@ def start(message: Message):
 
 @bot.message_handler(commands=['clear'])
 def clear_history(message: Message):
-    with open('users.json', 'r') as file:
+    with open('users.json', 'r', encoding='utf-8') as file:
         data_from_json = json.load(file)
         data_from_json[str(message.from_user.id)]['history'] = []
-    with open('users.json', 'w') as file:
+    with open('users.json', 'w', encoding='utf-8') as file:
         json.dump(data_from_json, file, indent=4)
 
     bot.send_message(chat_id=message.chat.id, text='Search history cleared')
@@ -92,19 +92,17 @@ def search_drink(message: Message):
         response = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/random.php').text)
         data = information_output(response['drinks'][0], message.from_user.id)
 
-        bot.send_message(chat_id=message.chat.id, text=data[0])
-        bot.send_photo(message.chat.id, data[1])
+        bot.send_photo(message.chat.id, data[1], data[0])
 
     elif message.text == '\U0001F553 History':
-        with open('users.json', 'r') as file:
+        with open('users.json', 'r', encoding='utf-8') as file:
             data_from_json = json.load(file)
         history = data_from_json[str(message.from_user.id)]['history']
         if len(history) == 0:
             bot.send_message(chat_id=message.chat.id, text='History is empty')
         else:
             for elem in history:
-                bot.send_message(chat_id=message.chat.id, text=elem[0])
-                bot.send_photo(message.chat.id, elem[1])
+                bot.send_photo(message.chat.id, elem[1], elem[0])
 
 
 def search_by_ingredient_handle(message: Message):
@@ -119,7 +117,7 @@ def search_by_ingredient_handle(message: Message):
 
         try:    # проверка наличия коктейля
             response = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=' + name).text)
-            with open('users.json', 'r') as file:
+            with open('users.json', 'r', encoding='utf-8') as file:
                 data_from_json = json.load(file)
             # создание списка коктейлей совпавших по ключ слову
             cocktails = [response['drinks'][x] for x in range(0, len(response['drinks']))]
@@ -132,7 +130,7 @@ def search_by_ingredient_handle(message: Message):
                 data_from_json[str(message.from_user.id)]['ingredient_search'][count] = cocktail["strDrink"]
                 count += 1
 
-            with open('users.json', 'w') as file:
+            with open('users.json', 'w', encoding='utf-8') as file:
                 json.dump(data_from_json, file, indent=4)
 
             bot.send_message(chat_id=message.chat.id, text=f'Pick cocktail number (1-{count}):')
@@ -152,7 +150,7 @@ def pick_cocktail_by_ingredient_handle(message: Message):
     elif message.text.startswith('/'):
         commands_pick(message)
     else:
-        with open('users.json', 'r') as file:
+        with open('users.json', 'r', encoding='utf-8') as file:
             data_from_json = json.load(file)
             qty = len(data_from_json[str(message.from_user.id)]['ingredient_search'])
         # проверка ввода
@@ -161,10 +159,8 @@ def pick_cocktail_by_ingredient_handle(message: Message):
             cocktail = json.loads(requests.get('https://www.thecocktaildb.com/api/json/v1/1/search.php?s=' + name).text)
             data = information_output(cocktail['drinks'][0], message.from_user.id)
             data_from_json[str(message.from_user.id)]['ingredient_search'].clear()
-            # вывод сообщения
-            bot.send_message(chat_id=message.chat.id, text=data[0])
             # вывод изображения
-            bot.send_photo(message.chat.id, data[1])
+            bot.send_photo(message.chat.id, data[1], data[0])
             bot.register_next_step_handler(message, callback=pick_cocktail_by_ingredient_handle)
 
         else:  # обработка ошибки ввода
@@ -195,10 +191,10 @@ def search_drink_handle(message: Message):
                 mess += f'{count + 1} - {cocktail["strDrink"]}\n'
                 count += 1
             # загрузка поиска в бд
-            with open('users.json', 'r') as file:
+            with open('users.json', 'r', encoding='utf-8') as file:
                 data_from_json = json.load(file)
                 data_from_json[str(message.from_user.id)]['cocktail'] = name + '-' + str(count)
-            with open('users.json', 'w') as file:
+            with open('users.json', 'w', encoding='utf-8') as file:
                 json.dump(data_from_json, file, indent=4)
 
             # вывод сообщений
@@ -223,7 +219,7 @@ def pick_cocktail_handle(message: Message):
 
     else:
         # выгрузка ключ слова и кол-ва напитков из бд
-        with open('users.json', 'r') as file:
+        with open('users.json', 'r', encoding='utf-8') as file:
             data_from_json = json.load(file)
             name, qty = data_from_json[str(message.from_user.id)]['cocktail'].split('-')
             qty = int(qty)
@@ -235,10 +231,8 @@ def pick_cocktail_handle(message: Message):
             # запись выбранного напитка
             cocktail = cocktails[int(message.text) - 1]
             data = information_output(cocktail, message.from_user.id)
-            # вывод сообщения
-            bot.send_message(chat_id=message.chat.id, text=data[0])
             # вывод изображения
-            bot.send_photo(message.chat.id, data[1])
+            bot.send_photo(message.chat.id, data[1], data[0])
             bot.register_next_step_handler(message, callback=pick_cocktail_handle)
 
         else:   # обработка ошибки ввода
@@ -251,6 +245,10 @@ def information_output(cocktail: dict, user_id: int):
     mess = ''
     count = 0
     mess += f'Name: {cocktail["strDrink"]} \U0001F379\n'
+    if cocktail["strAlcoholic"] == 'Alcoholic':
+        mess += '\nAlcoholic: Yes'
+    else:
+        mess += '\nAlcoholic: No'
     mess += '\n\nIngredients \U0001F6D2\n\n'
 
     # запись ингредиентов
@@ -270,7 +268,7 @@ def information_output(cocktail: dict, user_id: int):
     mess += '\n'.join(instruction)
 
     # запись в историю запросов
-    with open('users.json', 'r') as file:
+    with open('users.json', 'r', encoding='utf-8') as file:
         data_from_json = json.load(file)
     history = data_from_json[str(user_id)]['history']
 
@@ -278,7 +276,7 @@ def information_output(cocktail: dict, user_id: int):
         history.pop(0)
     history.append((mess, cocktail['strDrinkThumb']))
 
-    with open('users.json', 'w') as file:
+    with open('users.json', 'w', encoding='utf-8') as file:
         json.dump(data_from_json, file, indent=4)
     image = cocktail['strDrinkThumb']
     return mess, image
@@ -289,6 +287,8 @@ def commands_pick(message: Message):
         clear_history(message)
     elif message.text == '/help':
         help_bot(message)
+    else:
+        bot.send_message(chat_id=message.chat.id, text='Input error')
 
 
 bot.polling()
