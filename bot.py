@@ -246,7 +246,7 @@ def information_output(cocktail: dict, user_id: int):
     count = 0
     mess += f'Name: {cocktail["strDrink"]} \U0001F379\n'
     if cocktail["strAlcoholic"] == 'Alcoholic':
-        mess += '\nAlcoholic: Yes'
+        mess += '\nAlcoholic: Yeeet'
     else:
         mess += '\nAlcoholic: No'
     mess += '\n\nIngredients \U0001F6D2\n\n'
