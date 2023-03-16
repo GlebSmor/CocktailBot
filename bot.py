@@ -291,4 +291,6 @@ def commands_pick(message: Message):
         bot.send_message(chat_id=message.chat.id, text='Input error')
 
 
-bot.polling()
+if __name__ == '__main__':
+    bot.delete_webhook(drop_pending_updates=True)
+    bot.infinity_polling()
